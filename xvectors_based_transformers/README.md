@@ -40,7 +40,7 @@ From the root of the repo, run :
 ```
 docker run --gpus all \
   -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/development/vpc-transformer \
+  registry.gitlab.inria.fr/comprise/voice_transformation \
   ./build.sh --anoni_pool [librispeech_subset]
 ```
 
@@ -56,7 +56,7 @@ Edit the `anoni_pool` property in `io/config/config_transform.sh` to use the x-v
 ```
 docker run --gpus all \
   -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/development/vpc-transformer \
+  registry.gitlab.inria.fr/comprise/voice_transformation \
   ./transform.sh --ipath io/inputs/e0003.wav
 ```
 *(or replace `e0003.wav` with your own wav file)*
@@ -70,7 +70,7 @@ You can also run the container in interactive mode :
 ```
 docker run -it --gpus all \
   -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/development/vpc-transformer
+  registry.gitlab.inria.fr/comprise/voice_transformation
 ```
 ### Running a REST server to perform the transformation
 
@@ -78,7 +78,7 @@ docker run -it --gpus all \
 docker run --gpus all \
   -v "$(pwd)"/io:/opt/io \
   -p 5000:5000 \
-  registry.gitlab.inria.fr/comprise/development/vpc-transformer \
+  registry.gitlab.inria.fr/comprise/voice_transformation \
   python3 app.py
 ```
 
@@ -145,15 +145,6 @@ Pretrained models can be downloaded with `./baseline/local/download_models.sh` (
 For more details about the baseline and data, please see [The VoicePrivacy 2020 Challenge Evaluation Plan](https://www.voiceprivacychallenge.org/docs/VoicePrivacy_2020_Eval_Plan_v1_1.pdf)
 
 For the latest updates in the baseline and evaluation scripts, please visit [News and updates page](https://github.com/Voice-Privacy-Challenge/Voice-Privacy-Challenge-2020/wiki/News-and-Updates)
-
-
-## Build the docker image
-
-```
-git clone --recurse-submodules https://gitlab.inria.fr/comprise/development/vpc-transformer  
-cd vpc-transformer
-sudo docker build -t comprise-vpc .
-```
 
 
 ## License
