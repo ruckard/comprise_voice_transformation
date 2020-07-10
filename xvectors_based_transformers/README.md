@@ -116,9 +116,21 @@ If you don't use the docker container, you will have to install some components 
 
 ### Install
 
-1. Clone this repo with the submodules : `git clone --recurse-submodules https://gitlab.inria.fr/comprise/development/vpc-transformer `
-2. You must install some dependencies using `sudo` (or `sudo-g5k` on grid5000). `sudo apt install sox flac`, and `cd kaldi/tools && sudo extras/install_mkl.sh`.
-3. ./install.sh
+- Get the submodules : 
+
+```
+git submodule update --init --recursive nii
+git submodule update --init --recursive nii_scripts
+```
+
+- Install some dependencies using `sudo` (or `sudo-g5k` on grid5000). 
+
+```
+sudo apt install sox flac
+cd kaldi/tools && sudo extras/install_mkl.sh
+```
+
+- `./install.sh`
 
 
 ### Running the recipe
