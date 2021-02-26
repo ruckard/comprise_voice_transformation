@@ -19,18 +19,28 @@
 #
 
 set -e
+cd $(dirname $0)
+
 
 #===== begin config =======
-anoni_pool=
-if [ -z ${anoni_pool} ];then
-  anoni_pool=train-other-500
-fi
+stage=1
+sample_frequency=
 
-nj=
+case $1 in
+  --stage) shift; stage=$1; shift ;;
+  --anon_pool) shift; anon_pool=$1; shift ;;
+  --nj) shift; nj=$1; shift ;;
+  --sample_frequency) shift; sample_frequency=$1; shift ;;
+esac
+
+if [ -z ${anon_pool} ];then
+  anon_pool=train-other-500
+fi
+output_dir=anon_pool/$anon_pool
+
 if [ -z ${nj} ];then
   nj=$(nproc)
 fi
-stage=1
 
 clear_cache=true
 
@@ -44,10 +54,8 @@ corpora=corpora
 
 # x-vector extraction
 xvec_nnet_dir=exp/models/2_xvect_extr/exp/xvector_nnet_1a
-anon_xvec_out_dir=${xvec_nnet_dir}/anon
 
 #=========== end config ===========
-
 if ${clear_cache}; then
   printf "${GREEN}\nClearing cache...${NC}\n"
   find data/ -iname ".done*" -delete
@@ -57,7 +65,7 @@ fi
 # Download LibriTTS data sets for training anonymization system 
 if [ $stage -le 5 ]; then
   printf "${GREEN}\nStage 5: Downloading LibriTTS data sets for training anonymization system ...${NC}\n"
-  local/download_and_untar.sh $corpora $data_url_libritts $anoni_pool LibriTTS || exit 1;
+  local/download_and_untar.sh $corpora $data_url_libritts $anon_pool LibriTTS || exit 1;
 fi
 
 libritts_corpus=$(realpath $corpora/LibriTTS)       # Directory for LibriTTS corpus 
@@ -67,13 +75,35 @@ libritts_corpus=$(realpath $corpora/LibriTTS)       # Directory for LibriTTS cor
 if [ $stage -le 6 ]; then
   # Prepare data for pool 
   printf "${GREEN}\nStage 6: Prepare anonymization pool data...${NC}\n"
-  local/data_prep_libritts.sh ${libritts_corpus}/${anoni_pool} data/${anoni_pool} || exit 1;
+  local/data_prep_libritts.sh ${libritts_corpus}/${anon_pool} data/${anon_pool} || exit 1;
 fi
-  
+
+num_spk=$(wc -l < data/${anon_pool}/spk2utt)
+[ $nj -gt $num_spk ] && nj=$num_spk
+
 if [ $stage -le 7 ]; then
   printf "${GREEN}\nStage 7: Extracting xvectors for anonymization pool...${NC}\n"
-  local/featex/01_extract_xvectors.sh --nj $nj data/${anoni_pool} ${xvec_nnet_dir} \
-    ${anon_xvec_out_dir} || exit 1;
+  local/featex/01_extract_xvectors.sh --nj $nj data/${anon_pool} ${xvec_nnet_dir} \
+    ${output_dir}/xvectors || exit 1;
+fi
+
+if [ $stage -le 8 ]; then
+  printf "${GREEN}\nStage 8a: Extracting pitch for anonymization pool...${NC}\n"
+  if [ -z $sample_frequency ]; then
+    local/featex/make_pitch.sh --nj $nj --cmd "$train_cmd" data/${anon_pool} \
+      exp/make_pitch data/${anon_pool}/pitch || exit 1;
+  else
+    local/featex/make_pitch.sh --nj $nj --cmd "$train_cmd" --sample_frequency $sample_frequency data/${anon_pool} \
+      exp/make_pitch data/${anon_pool}/pitch || exit 1;
+  fi
+  printf "${GREEN}\nStage 8b: Combining speaker pitch for anonymization pool...${NC}\n"
+  python local/featex/compute_spk_pitch.py data/${anon_pool} || exit 1;
+fi
+
+if [ $stage -le 9 ]; then
+  cp -R data/${anon_pool}/pitch ${output_dir}
+  cp -R data/${anon_pool}/yaapt_pitch ${output_dir}
+  cp data/${anon_pool}/spk2gender ${output_dir}
 fi
 
 echo Done

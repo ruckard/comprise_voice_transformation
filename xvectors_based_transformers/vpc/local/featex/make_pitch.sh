@@ -14,6 +14,7 @@ cmd=run.pl
 pitch_config=conf/pitch.conf
 pitch_postprocess_config=
 paste_length_tolerance=2
+sample_frequency=
 compress=true
 write_utt2num_frames=false  # If true writes utt2num_frames.
 write_utt2dur=false
@@ -133,12 +134,21 @@ if [ -f $data/segments ]; then
   #pitch_feats="ark,s,cs:extract-segments scp,p:$scp $logdir/segments.JOB ark:- | \
   #  compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config ark:- ark:- |"
 
-  $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
-    extract-segments scp,p:$scp $logdir/segments.JOB ark:- \| \
-    compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config ark:- ark:- \| \
-    copy-feats --compress=$compress $write_num_frames_opt ark:- \
-      ark,scp:$pitch_dir/raw_pitch_$name.JOB.ark,$pitch_dir/raw_pitch_$name.JOB.scp \
-     || exit 1;
+  if [ ! -z "$sample_frequency" ]; then
+      $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
+        extract-segments scp,p:$scp $logdir/segments.JOB ark:- \| \
+        compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config --sample-frequency=$sample_frequency ark:- ark:- \| \
+        copy-feats --compress=$compress $write_num_frames_opt ark:- \
+        ark,scp:$pitch_dir/raw_pitch_$name.JOB.ark,$pitch_dir/raw_pitch_$name.JOB.scp \
+        || exit 1;
+  else
+      $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
+        extract-segments scp,p:$scp $logdir/segments.JOB ark:- \| \
+        compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config ark:- ark:- \| \
+        copy-feats --compress=$compress $write_num_frames_opt ark:- \
+        ark,scp:$pitch_dir/raw_pitch_$name.JOB.ark,$pitch_dir/raw_pitch_$name.JOB.scp \
+        || exit 1;
+  fi
 
 else
   echo "$0: [info]: no segments file exists: assuming wav.scp indexed by utterance."
@@ -152,13 +162,19 @@ else
   #pitch_feats="ark,s,cs:compute-kaldi-pitch-feats --verbose=2 \
   #    --config=$pitch_config scp,p:$logdir/wav_${name}.JOB.scp ark:- | \
   #  process-kaldi-pitch-feats $postprocess_config_opt ark:- ark:- |"
-
-  $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
-    compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config \
+  if [ ! -z "$sample_frequency" ]; then
+    $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
+      compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config --sample-frequency=$sample_frequency \
       scp:$logdir/wav_${name}.JOB.scp \
       ark,scp:$pitch_dir/raw_pitch_$name.JOB.ark,$pitch_dir/raw_pitch_$name.JOB.scp \
       || exit 1;
-
+  else
+    $cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
+      compute-kaldi-pitch-feats --verbose=2 --config=$pitch_config \
+      scp:$logdir/wav_${name}.JOB.scp \
+      ark,scp:$pitch_dir/raw_pitch_$name.JOB.ark,$pitch_dir/raw_pitch_$name.JOB.scp \
+      || exit 1;
+  fi
   #$cmd JOB=1:$nj $logdir/make_pitch_${name}.JOB.log \
   #  process-kaldi-pitch-feats $postprocess_config_opt \
   #    scp:$pitch_dir/raw_pitch_${name}.JOB.scp \

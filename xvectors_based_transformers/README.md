@@ -6,9 +6,9 @@ This project provides a Voice Transformation Tool to apply the anonymization met
 **As this implementation relies on kaldi and this [CURRENNT tool from NII](https://github.com/nii-yamagishilab/project-CURRENNT-public/tree/3b4648f1f4ec45635c217bbf52be74c54aae3b80), it requires a
 CUDA-capable graphics card.**   
 
-
-The transformation can be run locally on a single wav file using script or a REST service.   
-A docker image is provided.  
+The transformation can be run locally using scripts or as a REST service. 
+The transformation relies on kaldi and other tools: you can either install each of them in your environment (see below) or you can use the provided docker images.   
+  
 
 ## Overview
 From the VPC 2020 repository :  
@@ -27,94 +27,87 @@ From the VPC 2020 repository :
 
 Please visit the [challenge website](https://www.voiceprivacychallenge.org/) for more information about the Challenge and this method.
 
-## Quick Start with Docker
 
-Clone this repo without the submodules ( `git clone [repo-url]` ) so the `io` folder can be mounted as a volume to the docker container that will be used. Models, config and a sample input are placed there, in dedicated subfolders (resp. `exp/models`, `config` and `inputs`).
+## Quick start: use the RESTful API in Docker to transform an audio file
 
-### Build the x-vectors pool (run once)
-
-A `build.sh` script, inside the container, allows you to build an x-vectors pool from a subset of Librispeech.
-
-From the root of the repo, run :
+Prerequisites: docker and [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) should be installed.  
 
 ```
-docker run --gpus all \
-  -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/voice_transformation \
-  ./build.sh --anoni_pool [librispeech_subset]
+docker run -d --gpus all -p 5000:5000 registry.gitlab.inria.fr/comprise/voice_transformation
 ```
+*Depending on your docker installation, you might have to execute this command with sudo privilege*
 
-This will download the given subset of Librispeech and extract the x-vectors of the speakers of this dataset. These x-vectors will be used to create a Transformer in the next step.
+The service is running on the port 5000 and responds to the endpoint: http://localhost:5000/vpc
 
-Note : You should replace `[librispeech_subset]` with either `dev-other` or `train-other-500`. You can try the former for a quick test but it might not contain enough speakers for our needs. The latter should be used but the build step can take a while.
+- Method: POST
+- Input: original audio file, parameters (JSON) 
+- Output: transformed audio file
 
-
-### Running a transformation sample
-
-Edit the `anoni_pool` property in `io/config/config_transform.sh` to use the x-vectors pool you built in the previous step.
+Here is an example of the way to use it in python:
 
 ```
-docker run --gpus all \
-  -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/voice_transformation \
-  ./transform.sh --ipath io/inputs/e0003.wav
+import requests
+import json
+
+API_URL = 'http://localhost:5000'  # replace localhost with the proper hostname
+
+# Read the content from an audio file
+input_file = 'samples/vctk_p225_003.wav'
+with open(input_file, mode='rb') as fp:
+    content = fp.read()
+
+# Transformation parameters
+params = {'wgender': 'f',
+          'cross_gender': 'same',
+          'distance': 'plda',
+          'proximity': 'random',
+          'sample-frequency': 48000}
+
+# Call the service
+response = requests.post('{}/vpc'.format(API_URL), data=content, params=json.dumps(params))
+
+# Save the result of the transformation in a new file
+result_file = 'transformed.wav'
+with open(result_file, mode='wb') as fp:
+    fp.write(response.content)
+
 ```
-*(or replace `e0003.wav` with your own wav file)*
- 
-The output will be in `io/results`.
-
-The transformation uses the provided pre-trained models and a specific configuration file that sets some transformation parameters (`io/config/config_params.sh`).
-
-You can also run the container in interactive mode :
-
-```
-docker run -it --gpus all \
-  -v "$(pwd)"/io:/opt/io \
-  registry.gitlab.inria.fr/comprise/voice_transformation
-```
-### Running a REST server to perform the transformation
-
-```
-docker run --gpus all \
-  -v "$(pwd)"/io:/opt/io \
-  -p 5000:5000 \
-  registry.gitlab.inria.fr/comprise/voice_transformation \
-  python3 app.py
-```
-
-Then you can call the transformer at `http://[hostname]:5000/vpc`
-
 
 ## Configuration and parameters
 
-Main parameter for `transform.sh`: 
-
-- `--ipath` input path for the wav file to transform (wav format : RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 16000 Hz) 
-
-- `--opath` output path: default is results
-
-The file `config_transform.sh` contains the parameters of the transformation that can also be given on the command line. 
-
 ```
-wgender=f                             # gender m or f
-pseudo_xvec_rand_level=spk            # spk (all utterances will have same xvector) or utt (each utterance will have randomly selected xvector)
-#cross_gender="same"                  # false, same gender xvectors will be selected; true, other gender xvectors
-#cross_gender="other"                 # false, same gender xvectors will be selected; true, other gender xvectors; random gender can be selected
-cross_gender="random"                 # false, same gender xvectors will be selected; true, other gender xvectors; random gender can be selected
-distance="plda"                       # cosine or plda
-#proximity="random"                   # nearest or farthest speaker to be selected for anonymization
-#proximity="farthest"                 # nearest or farthest speaker to be selected for anonymization
-proximity="dense"                     # nearest or farthest speaker to be selected for anonymization
-anoni_pool="train_other_500"          # change this to the data you want to use for anonymization pool
-#anoni_pool="dev-other"
+transform.sh [--anon_pool <anon_pool_dir>|--sample-frequency <nb>|--cross-gender (same|other|random)|--distance (plda|cosine)|--proximity (dense|farthest|random)] --wgender (m|f) <input_file> <output_dir>
 ```
 
+- `--wgender` (required): gender of the speaker in the audio file to transform
+- `--cross-gender`: gender of the target speakers to select from the pool (same as the original speaker, the other one or randomly)
+- `--anon-pool`: path to the anonymization pool of speakers to use
+- `--distance`: plda or cosine
+- `--proximity`: the strategy to choose the pool of target speakers (dense, farthest or random)
+- `<input_file>` input path for the wav file to transform (wav format : RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 16000 Hz) 
+- `<output_file>` output path: default is results
+
+The transformer expects audio files sampled at a frequency of 16KHz, but other frequencies can be accepted using the `--sample-frequency` param.
+
+## Use the dockerized environment to run the scripts
+
+At a lower level, the implementation is a Kaldi recipe and can be used as is, for the use cases not fulfilled by the RESTful API (for example, building a new anonymization pool, or for batch processing): the entry points are then a set of scripts, one for each functionality. 
+Because the execution environment can be tedious to install, we also provide another docker image with only the execution environment (including kaldi) to run these scripts. This is a way to use it:
+
+From the root folder in this repository:
+```
+docker run --rm --gpus all \
+  -v "$(pwd)"/vpc:/opt/vpc \
+  registry.gitlab.inria.fr/comprise/voice_transformation/env \
+  vpc/transform.sh --wgender f samples/e0003.wav
+```
+*Note: depending on your docker installation, you may have to run docker with sudo privileges*
 
 ## Manual installation
 
-If you don't use the docker container, you will have to install some components (including kaldi) manually.
+If you don't use the docker container, you will have to install some components (including kaldi) manually.  This installation process expects that kaldi is already installed and accessible in a `kaldi` folder or symlink from the root of this repo.
 
-### Install
+From the `env` folder:
 
 - Get the submodules : 
 
@@ -123,7 +116,7 @@ git submodule update --init --recursive nii
 git submodule update --init --recursive nii_scripts
 ```
 
-- Install some dependencies using `sudo` (or `sudo-g5k` on grid5000). 
+- Install some dependencies using `sudo`
 
 ```
 sudo apt install sox flac
@@ -133,12 +126,56 @@ cd kaldi/tools && sudo extras/install_mkl.sh
 - `./install.sh`
 
 
-### Running the recipe
+## COMPRISE use case
 
-Pretrained models can be downloaded with `./baseline/local/download_models.sh` (requires a password from the Voice Privacy Challenge team)
+### Step 1 : Pre-build the parameters 
+This is a preparatory step, ran just once.   
+The results of this step is the pool of x-vectors, extracted from a subset of LibriSpeech.  
 
-1. `cd vpc` 
-2. run `./build.sh` and `transform.sh`. 
+The `vpc/build.sh` script builds an x-vectors pool from a subset of Librispeech.
+
+This script takes as input the name of a librispeech subset. From the `vpc` folder:
+
+```
+./vpc/build.sh --anon_pool [librispeech_subset]
+```
+
+or, using the dockerized execution environment:
+
+```
+docker run --rm --gpus all \
+  -v "$(pwd)"/vpc:/opt/vpc \
+  registry.gitlab.inria.fr/comprise/voice_transformation/env \
+  ./vpc/build.sh --anon-pool [librispeech_subset]
+```
+
+You should replace `[librispeech_subset]` with either `dev-other` or `train-other-500`, for example. You can try the former for a quick test but it might not contain enough speakers for our needs. The latter should be used but the build step can take a while.
+
+This will download the given subset of Librispeech and extract the x-vectors of the speakers of this subset. The x-vectors and pitch data will be stored in `io/anon_pool/[librispeech_subset]`. 
+
+### Step 2 : personalization
+[TODO: fit / extract user's x-vector]
+
+### Step 3 : transform an utterance
+Finally, the personalized transformer is used to transform the voice of the user.
+
+```
+./vpc/transform.sh --wgender m ./vpc/samples/e0003.wav output/
+```
+
+or, using docker:
+
+```
+docker run --gpus all \
+  -v "$(pwd)"/vpc:/opt/vpc \
+  registry.gitlab.inria.fr/comprise/voice_transformation \
+  ./vpc/transform.sh --wgender m ./vpc/samples/e0003.wav output/
+```
+  
+- the "--wgender" argument is the gender of the original audio file
+- the next argument "samples/e0003.wav" is the path to the audio file to process
+- the last argument (here "output") is where the result will be stored
+Chek the section above to get the list of the parameters.
 
 ## General information
 
@@ -146,6 +183,45 @@ For more details about the baseline and data, please see [The VoicePrivacy 2020 
 
 For the latest updates in the baseline and evaluation scripts, please visit [News and updates page](https://github.com/Voice-Privacy-Challenge/Voice-Privacy-Challenge-2020/wiki/News-and-Updates)
 
+
+## Developers
+
+### Docker image for development
+
+Developers should use the private docker registry : `registry.gitlab.inria.fr/comprise/development/vpc-transformer`  
+*(instead of the public one : `registry.gitlab.inria.fr/comprise/voice_transformation`)*  
+
+### Build and push the docker images
+
+#### Private registry:
+Build and push the image with the execution environment:
+
+```
+docker build -t registry.gitlab.inria.fr/comprise/development/vpc-transformer/env env  
+docker push registry.gitlab.inria.fr/comprise/development/vpc-transformer/env
+```
+
+Build and push the image with the service:
+
+```
+docker build -t registry.gitlab.inria.fr/comprise/development/vpc-transformer .  
+docker push registry.gitlab.inria.fr/comprise/development/vpc-transformer
+```
+
+#### Public registry:
+Build and push the image with the execution environment:
+
+```
+docker build -t registry.gitlab.inria.fr/comprise/voice_transformation/env env  
+docker push registry.gitlab.inria.fr/comprise/voice_transformation/env
+```
+
+Build and push the image with the service:
+
+```
+docker build -t registry.gitlab.inria.fr/comprise/voice_transformation .  
+docker push registry.gitlab.inria.fr/comprise/voice_transformation
+```
 
 ## License
 

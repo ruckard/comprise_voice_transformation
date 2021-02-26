@@ -33,7 +33,7 @@ plda_dir=$4
 src_dataname=$(basename $src_data)
 pool_dataname=$(basename $pool_data)
 src_xvec_dir=${xvec_out_dir}/xvectors_${src_dataname}
-pool_xvec_dir=${xvec_out_dir}/xvectors_${pool_dataname}
+pool_xvec_dir=${pool_data}/xvectors
 
 affinity_scores_dir=${src_xvec_dir}/spk_pool_scores
 src_affinity_dir=${src_xvec_dir}/spk_pairwise_scores
