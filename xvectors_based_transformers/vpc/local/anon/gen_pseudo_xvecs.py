@@ -96,7 +96,7 @@ n_poolspk = len(pool_spk2gender)
 
 # Read pool xvectors
 print("Reading pool xvectors.")
-pool_xvec_file = join(xvec_out_dir, 'xvectors_'+basename(pool_data),
+pool_xvec_file = join(pool_data, 'xvectors',
                      'spk_xvector.scp')
 pool_xvectors = {}
 c = 0
@@ -156,6 +156,7 @@ if proximity in ["dense", "sparse"]:
 # These two are main output variables
 pseudo_xvec_map = {}
 pseudo_gender_map = {}
+pseudo_spk_map = {}
 
 for spkidx, spk in enumerate(src_spks):
     gender = src_spk2gender[spk]
@@ -224,21 +225,25 @@ for spkidx, spk in enumerate(src_spks):
         # Select a single x-vector if spk-level otherwise select many
         if rand_level == "spk":
             xvec_idx = random.sample(range(n_shortlisted), int(n_shortlisted * CLUSTER_PROP))
+            selected_pool_spks = [pool_spks[shortlisted_idx[ps]] for ps in xvec_idx]
             print(f"Selecting indices {xvec_idx} randomly from {n_shortlisted} xvectors.")
             pseudo_xvec = np.mean(shortlisted_xvecs[xvec_idx, :], axis=0)
             X_after[n_poolspk+spkidx, :] = pseudo_xvec
             # Assign it to all utterances of the current speaker
             for uttid in src_spk2utt[spk]:
                 pseudo_xvec_map[uttid] = pseudo_xvec
+                pseudo_spk_map[uttid] = selected_pool_spks
         elif rand_level == 'utt':
             # For rand_level = utt, random xvector is assigned to all the utterances
             # of a speaker
             for uttid in src_spk2utt[spk]:
                 # Compute random vector for every utt
                 xvec_idx = random.sample(range(n_shortlisted), int(n_shortlisted * CLUSTER_PROP))
+                selected_pool_spks = [pool_spks[shortlisted_idx[ps]] for ps in xvec_idx]
                 pseudo_xvec = np.mean(shortlisted_xvecs[xvec_idx, :], axis=0)
                 # Assign it to all utterances of the current speaker
                 pseudo_xvec_map[uttid] = pseudo_xvec
+                pseudo_spk_map[uttid] = selected_pool_spks
         else:
             print("rand_level not supported! Errors will happen!")
 
@@ -308,3 +313,10 @@ with open(join(pseudo_xvecs_dir, 'spk2gender'), 'w') as f:
     spk2gen_arr = [spk+' '+gender for spk, gender in pseudo_gender_map.items()]
     sorted_spk2gen = sorted(spk2gen_arr)
     f.write('\n'.join(sorted_spk2gen) + '\n')
+
+print("Writing exact mapping of pool speakers for pitch conversion.")
+with open(join(pseudo_xvecs_dir, 'utt2pool'), 'w') as f:
+    utt2pool_arr = [utt + ' ' + ' '.join(pool_list) for utt, pool_list in pseudo_spk_map.items()]
+    sorted_utt2pool = sorted(utt2pool_arr)
+    f.write('\n'.join(sorted_utt2pool) + '\n')
+
