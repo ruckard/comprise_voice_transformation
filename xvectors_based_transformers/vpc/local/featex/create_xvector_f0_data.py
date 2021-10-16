@@ -26,9 +26,11 @@ def percentile_interpolate(src_f0, tgt_f0):
     tgt_f0_nz = tgt_f0[tgt_f0 != 0]
 
     # Get source percentile
-    min_src = src_f0_nz.min()
-    max_src = src_f0_nz.max()
-    src_percentiles = (src_f0_nz - min_src) / (max_src - min_src) * 100
+    src_order = src_f0_nz.argsort()
+    src_ranks = np.empty_like(src_order)
+    len_src = len(src_f0_nz)
+    src_ranks[src_order] = np.arange(len_src)
+    src_percentiles = (src_ranks / len_src) * 100
 
     # Get target pitch corresponding to source percentile
     tgt_values = np.percentile(tgt_f0_nz, src_percentiles)

@@ -52,16 +52,16 @@ import json
 API_URL = 'http://localhost:5000'  # replace localhost with the proper hostname
 
 # Read the content from an audio file
-input_file = 'samples/vctk_p225_003.wav'
+input_file = 'io/inputs/e0003.wav'
 with open(input_file, mode='rb') as fp:
     content = fp.read()
 
 # Transformation parameters
-params = {'wgender': 'f',
+params = {'wgender': 'm',
           'cross_gender': 'same',
           'distance': 'plda',
-          'proximity': 'random',
-          'sample-frequency': 48000}
+          'proximity': 'dense',
+          'sample-frequency': 16000}
 
 # Call the service
 response = requests.post('{}/vpc'.format(API_URL), data=content, params=json.dumps(params))
@@ -98,8 +98,9 @@ From the root folder in this repository:
 ```
 docker run --rm --gpus all \
   -v "$(pwd)"/vpc:/opt/vpc \
+  -v "$(pwd)"/io:/opt/vpc/io \
   registry.gitlab.inria.fr/comprise/voice_transformation/env \
-  vpc/transform.sh --wgender f samples/e0003.wav
+  vpc/transform.sh --wgender m io/inputs/e0003.wav
 ```
 *Note: depending on your docker installation, you may have to run docker with sudo privileges*
 
@@ -160,7 +161,7 @@ This will download the given subset of Librispeech and extract the x-vectors of 
 Finally, the personalized transformer is used to transform the voice of the user.
 
 ```
-./vpc/transform.sh --wgender m ./vpc/samples/e0003.wav output/
+./vpc/transform.sh --wgender m ./io/inputs/e0003.wav ./io/output/
 ```
 
 or, using docker:
@@ -168,8 +169,9 @@ or, using docker:
 ```
 docker run --gpus all \
   -v "$(pwd)"/vpc:/opt/vpc \
+  -v "$(pwd)"/io:/opt/vpc/io \
   registry.gitlab.inria.fr/comprise/voice_transformation \
-  ./vpc/transform.sh --wgender m ./vpc/samples/e0003.wav output/
+  ./vpc/transform.sh --wgender m ./io/inputs/e0003.wav ./io/output/
 ```
   
 - the "--wgender" argument is the gender of the original audio file
